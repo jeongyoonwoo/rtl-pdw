@@ -1,0 +1,31 @@
+# Quartus 생성물
+db/
+incremental_db/
+output_files/
+qdb/
+tmp-clearbox/
+greybox_tmp/
+*.qws
+*.qarlog
+*.rpt
+*.summary
+*.smsg
+*.done
+*.pin
+*.jdi
+*.sld
+
+# ModelSim / Questa 생성물
+work/
+transcript
+*.wlf
+*.vstf
+modelsim.ini
+
+# iverilog
+*.vvp
+*.vcd
+
+# Python
+__pycache__/
+*.pyc
