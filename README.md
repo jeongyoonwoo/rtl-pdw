@@ -130,18 +130,30 @@ S2 시나리오를 한 번 재생하면 HEX에 정상 프레임 수와 스트림
 
 모든 항목이 맞으면 LEDR[4] 합격 LED가 켜집니다. 다른 시나리오의 기대값은 S1 `50 23B3`, S3 `09 F352`입니다.
 
-![보드 HEX 표시](docs/board_hex.jpg)
+스트림 서명은 출력된 2,142바이트(102프레임 × 21바이트) 전체에 대한 CRC-16입니다. 서명이 시뮬레이션과 같다는 것은 보드에서 나간 바이트 전체가 시뮬레이션과 비트 단위로 같다는 뜻입니다. 같은 표시값을 보드 최상위 테스트벤치(`tb_de10_pdw_top.v`)로 먼저 확인했고, 보드 실측이 그 값과 일치했습니다.
 
 ### Signal Tap 캡처
 
-첫 프레임 21바이트가 기대값과 같은 것을 Signal Tap으로 확인했습니다.
+첫 프레임 21바이트가 기대값과 같은 것을 Signal Tap으로 확인했습니다. 샘플 클록은 CLOCK_50, 깊이는 2K, 트리거는 `m_valid` 상승 에지입니다.
 
 ```
 1A CF FC 1D | 00 00 | 01 | 00 00 00 95 | 00 0F | 54 75 | 19 BE | 00 01 | 4F 22
 ASM         | 순번 0 | N=1| TOA 149    | PW 15 | PA    | FREQ  | FLAGS | CRC
 ```
 
-![Signal Tap 첫 프레임](docs/signaltap_frame0.png)
+관측 파형 (1칸 = 1클록, 20ns):
+
+```
+clock         0    1    2    3    4   ...  18   19   20   21
+m_valid     _/‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾  ...  ‾‾‾‾‾‾‾‾‾‾‾‾‾‾‾\___
+m_data        1A   CF   FC   1D   00  ...  01   4F   22
+m_last      ____________________________  ...  __________/‾‾\___
+good_frames   0000 ....................................... 0001
+```
+
+`m_valid`가 21클록 연속으로 서고, 마지막 바이트(CRC 하위 `22`)에서 `m_last`가 1클록 섭니다. 프레임이 끝난 직후 수신 모니터의 정상 프레임 수가 1이 됩니다.
+
+보드 작업은 외부 반출이 제한된 환경에서 했기 때문에, 보드 사진과 Signal Tap 화면 대신 관측값을 텍스트로 기록했습니다.
 
 ---
 
@@ -150,7 +162,7 @@ ASM         | 순번 0 | N=1| TOA 149    | PW 15 | PA    | FREQ  | FLAGS | CRC
 ```
 rtl-pdw/
 ├── rtl/
-│   ├── cordic_engine.v      CORDIC (Vectoring, 18클록) - 이전 프로젝트 rtl-monopulse의 모듈
+│   ├── cordic_engine.v      CORDIC (Vectoring, 18클록), 이전 프로젝트에서 재사용
 │   ├── pdw_frontend.v       ROM 재생 + 샘플 스트로브 + CORDIC
 │   ├── pdw_detector.v       검출 FSM, TOA/PW/PA/FREQ/FLAGS
 │   ├── pdw_framer.v         21바이트 프레임, CRC-16, valid/ready/last, pdw_drop
@@ -158,14 +170,14 @@ rtl-pdw/
 │   ├── pdw_stream_mon.v     보드용 수신 모니터 (CRC 검사, 스트림 서명)
 │   └── de10_pdw_top.v       보드 최상위 (SCEN 파라미터로 시나리오 선택)
 ├── tb/
-│   ├── tb_pdw_detector.v    3·4단계: PDW가 모델과 필드별로 같은지
-│   ├── tb_pdw_framer.v      5단계: 프레임 바이트, CRC, 역압
+│   ├── tb_pdw_detector.v    PDW가 모델과 필드별로 같은지
+│   ├── tb_pdw_framer.v      프레임 바이트, CRC, 역압
 │   ├── tb_pdw_top.v         통합: 바이트 스트림 해독, 정답표 대비 정확도 판정
 │   └── tb_de10_pdw_top.v    보드 최상위: HEX·LED 표시값 사전 확인
 ├── scripts/
 │   ├── gen_pdw_signal.py    합성 신호, 정답표, 비트 단위 CORDIC·검출 모델
 │   └── gen_frames.py        모델 PDW로 기대 프레임 생성 (CRC 검사값 0x29B1 자체 확인)
-├── sim_data/                스크립트가 만든 ROM·정답·모델 파일 (시드 고정, 재현 가능)
+├── sim_data/                스크립트가 만든 파일 (시드 고정, 재현 가능)
 │   ├── iq_rom_s1~s3.hex         ROM 초기값 (I‖Q, Q1.15)
 │   ├── cordic_ref_s1~s3.hex     샘플별 크기·위상 모델값
 │   ├── expected_pdw_s1~s3.hex   정답표 PDW
@@ -173,21 +185,21 @@ rtl-pdw/
 │   └── model_frame_s1~s3.hex    기대 프레임 (21바이트/줄)
 ├── quartus/
 │   └── de10_pdw_top.sdc     50MHz 클록 제약, 입출력 false path
-└── docs/                    보드 사진, Signal Tap 캡처
+└── .gitignore               Quartus·ModelSim 생성물 제외
 ```
 
 ## 6. 실행 방법
 
-모든 명령은 **저장소 루트에서** 실행합니다. RTL과 테스트벤치는 `sim_data/...` 상대 경로로 파일을 읽기 때문입니다.
+모든 명령은 **저장소 루트에서** 실행합니다. RTL과 테스트벤치가 `sim_data/...` 상대 경로로 파일을 읽기 때문입니다.
 
-**데이터 다시 만들기 (선택)**: `sim_data/`가 이미 들어 있으므로 필요하지 않습니다. 다시 만들 때는 Python 3와 NumPy로 아래를 실행합니다. 난수 시드가 고정이라 같은 파일이 나옵니다.
+**데이터 다시 만들기 (선택)**: `sim_data/`가 이미 들어 있으므로 필요하지 않습니다. 다시 만들 때는 Python 3와 NumPy로 아래를 실행합니다. 시드가 고정이라 같은 파일이 나옵니다.
 
 ```
 python scripts/gen_pdw_signal.py sim_data
 python scripts/gen_frames.py sim_data
 ```
 
-**시뮬레이션 (ModelSim)**: 저장소 루트를 작업 폴더로 두고 실행합니다. 콘솔에 필드별 오차와 PASS/FAIL이 출력됩니다.
+**시뮬레이션 (ModelSim)**: 콘솔에 필드별 오차와 PASS/FAIL이 출력됩니다.
 
 ```
 vlib work
@@ -196,7 +208,7 @@ vsim tb_pdw_top
 run -all
 ```
 
-**보드 (Quartus)**: Quartus 프로젝트(`.qpf`)를 **저장소 루트에** 만듭니다. Quartus는 `$readmemh` 경로를 프로젝트 폴더 기준으로 찾으므로, 프로젝트를 다른 폴더에 두면 ROM이 비어서 합성됩니다. 최상위를 `de10_pdw_top`으로 두고, `rtl/`의 파일 7개와 `quartus/de10_pdw_top.sdc`를 추가합니다. 핀은 DE10-Standard 기본 프로젝트의 CLOCK_50, KEY, SW, LEDR, HEX0~5 배정을 씁니다. 컴파일해 보드에 올린 뒤 SW[0]을 올리고 KEY[0]을 눌렀다 떼면 ROM이 한 번 재생됩니다. 시나리오는 `SCEN` 파라미터(1~3, 기본 2)로 바꿉니다.
+**보드 (Quartus)**: Quartus 프로젝트(`.qpf`)를 **저장소 루트에** 만듭니다. Quartus는 `$readmemh` 경로를 프로젝트 폴더 기준으로 찾으므로, 다른 폴더에 두면 ROM이 비어서 합성됩니다. 최상위를 `de10_pdw_top`으로 두고 `rtl/`의 파일 7개와 `quartus/de10_pdw_top.sdc`를 추가합니다. 핀은 DE10-Standard 기본 프로젝트의 CLOCK_50, KEY, SW, LEDR, HEX0~5 배정을 씁니다. 보드에 올린 뒤 SW[0]을 올리고 KEY[0]을 눌렀다 떼면 ROM이 한 번 재생됩니다. 시나리오는 `SCEN` 파라미터(1~3, 기본 2)로 바꿉니다.
 
 ---
 
