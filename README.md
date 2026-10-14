@@ -223,8 +223,8 @@ run -all
 - 입력은 합성 신호이며, 실제 RF·ADC 연결은 다루지 않았습니다.
 - 프레임은 CCSDS 동기 마커와 CRC를 참고한 단순 구조이며, CCSDS 규격 전체를 따르지는 않습니다.
 
-다음 단계는 앞단에 **채널라이저**를 붙여 여러 주파수 채널에서 같은 검출·PDW 생성을 병렬로 수행하는 것입니다.
+다음 단계는 앞단에 **채널라이저**를 붙여 여러 주파수 채널에서 같은 검출·PDW 생성을 병렬로 수행하는 것입니다. 이 작업은 [rtl-channelizer](https://github.com/jeongyoonwoo/rtl-channelizer)로 이어졌습니다.
 
 ## 관련 프로젝트
 
-순수 RTL CORDIC 모노펄스 수신기 → TMR 적용 및 SEU 오류 주입 검증 → **rtl-pdw** → 채널라이저(예정)
+순수 RTL CORDIC 모노펄스 수신기 → TMR 적용 및 SEU 오류 주입 검증 → **rtl-pdw** → [rtl-channelizer](https://github.com/jeongyoonwoo/rtl-channelizer) (16채널 PFB 채널라이저 + 채널별 PDW)
